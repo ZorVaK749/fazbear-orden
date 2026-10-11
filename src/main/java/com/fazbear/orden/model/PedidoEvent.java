@@ -1,7 +1,6 @@
 package com.fazbear.orden.model;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
 
 /**
  * Evento publicado en RabbitMQ cuando se confirma una orden.
@@ -14,12 +13,12 @@ public class PedidoEvent {
     private String emailUsuario;
     private BigDecimal total;
     private String estado;
-    private LocalDateTime fechaCreacion;
+    private String fechaCreacion;
 
     public PedidoEvent() {}
 
     public PedidoEvent(Long pedidoId, String usuarioId, String emailUsuario,
-                       BigDecimal total, String estado, LocalDateTime fechaCreacion) {
+                       BigDecimal total, String estado, String fechaCreacion) {
         this.pedidoId      = pedidoId;
         this.usuarioId     = usuarioId;
         this.emailUsuario  = emailUsuario;
@@ -43,6 +42,6 @@ public class PedidoEvent {
     public String getEstado()              { return estado; }
     public void setEstado(String v)        { this.estado = v; }
 
-    public LocalDateTime getFechaCreacion()        { return fechaCreacion; }
-    public void setFechaCreacion(LocalDateTime v)  { this.fechaCreacion = v; }
+    public String getFechaCreacion()        { return fechaCreacion; }
+    public void setFechaCreacion(String v)  { this.fechaCreacion = v; }
 }

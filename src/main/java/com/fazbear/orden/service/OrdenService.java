@@ -91,7 +91,7 @@ public class OrdenService {
             request.getEmailUsuario(),
             total,
             "PENDIENTE",
-            LocalDateTime.now()
+            LocalDateTime.now().toString()
         );
         rabbitTemplate.convertAndSend(RabbitMQConfig.EXCHANGE, RabbitMQConfig.ROUTING_KEY, evento);
         log.info("Evento pedido.creado publicado en RabbitMQ para pedidoId={}", pedidoId);
