@@ -9,6 +9,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import java.math.BigDecimal;
@@ -55,6 +57,8 @@ public class OrdenService {
      */
     public Map<String, Object> confirmarOrden(ConfirmarOrdenRequest request, String bearerToken) {
 
+        validarItems(request);
+
         // 1. Calcular total
         BigDecimal total = request.getItems().stream()
             .map(i -> i.getPrecioUnitario().multiply(BigDecimal.valueOf(i.getCantidad())))
@@ -83,6 +87,9 @@ public class OrdenService {
         if (pedidoCreado != null && pedidoCreado.get("id") instanceof Number) {
             pedidoId = ((Number) pedidoCreado.get("id")).longValue();
         }
+        if (pedidoId == null || pedidoId <= 0) {
+            throw new IllegalStateException("ms-pedidos no devolvió un pedidoId válido; no se publicará el evento");
+        }
 
         // 4. Publicar evento en RabbitMQ
         PedidoEvent evento = new PedidoEvent(
@@ -93,6 +100,8 @@ public class OrdenService {
             "PENDIENTE",
             LocalDateTime.now().toString()
         );
+        evento.setItems(request.getItems().stream()
+            .map(i -> new PedidoEvent.ItemStock(i.getProductoId(), i.getCantidad())).toList());
         rabbitTemplate.convertAndSend(RabbitMQConfig.EXCHANGE, RabbitMQConfig.ROUTING_KEY, evento);
         log.info("Evento pedido.creado publicado en RabbitMQ para pedidoId={}", pedidoId);
 
@@ -116,6 +125,20 @@ public class OrdenService {
         respuesta.put("total",    total);
         respuesta.put("estado",   "PENDIENTE");
         return respuesta;
+    }
+
+    private void validarItems(ConfirmarOrdenRequest request) {
+        if (request == null || request.getItems() == null || request.getItems().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "La orden requiere al menos un item");
+        }
+        for (ItemOrdenRequest item : request.getItems()) {
+            if (item == null || item.getProductoId() == null || item.getProductoId() <= 0
+                    || item.getCantidad() <= 0 || item.getPrecioUnitario() == null
+                    || item.getPrecioUnitario().signum() < 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Cada item requiere productoId/cantidad positivos y precio no negativo");
+            }
+        }
     }
 
     private List<Map<String, Object>> buildItemsPayload(List<ItemOrdenRequest> items) {

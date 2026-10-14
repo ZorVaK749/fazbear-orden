@@ -1,6 +1,8 @@
 package com.fazbear.orden.model;
 
 import java.math.BigDecimal;
+import java.util.List;
+import java.util.UUID;
 
 /**
  * Evento publicado en RabbitMQ cuando se confirma una orden.
@@ -14,6 +16,11 @@ public class PedidoEvent {
     private BigDecimal total;
     private String estado;
     private String fechaCreacion;
+    private String eventoId;
+    private int schemaVersion = 2;
+    private List<ItemStock> items = List.of();
+
+    public record ItemStock(Long productoId, int cantidad) {}
 
     public PedidoEvent() {}
 
@@ -25,6 +32,7 @@ public class PedidoEvent {
         this.total         = total;
         this.estado        = estado;
         this.fechaCreacion = fechaCreacion;
+        this.eventoId      = UUID.randomUUID().toString();
     }
 
     public Long getPedidoId()              { return pedidoId; }
@@ -44,4 +52,11 @@ public class PedidoEvent {
 
     public String getFechaCreacion()        { return fechaCreacion; }
     public void setFechaCreacion(String v)  { this.fechaCreacion = v; }
+
+    public String getEventoId() { return eventoId; }
+    public void setEventoId(String v) { this.eventoId = v; }
+    public int getSchemaVersion() { return schemaVersion; }
+    public void setSchemaVersion(int v) { this.schemaVersion = v; }
+    public List<ItemStock> getItems() { return items; }
+    public void setItems(List<ItemStock> v) { this.items = List.copyOf(v); }
 }

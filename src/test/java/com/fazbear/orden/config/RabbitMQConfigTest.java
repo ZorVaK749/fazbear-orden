@@ -12,7 +12,7 @@ class RabbitMQConfigTest {
         var declarations = new RabbitMQConfig().pedidoCreadoQueues();
         var queues = declarations.getDeclarablesByType(Queue.class);
         var bindings = declarations.getDeclarablesByType(Binding.class);
-        for (String service : java.util.List.of("notificaciones", "reportes")) {
+        for (String service : java.util.List.of("notificaciones", "reportes", "productos")) {
             String name = "pedido.creado." + service + ".queue";
             assertTrue(queues.stream().anyMatch(q -> q.getName().equals(name) && q.isDurable()));
             assertTrue(bindings.stream().anyMatch(b -> b.getDestination().equals(name)
@@ -20,6 +20,6 @@ class RabbitMQConfigTest {
                 && b.getRoutingKey().equals(RabbitMQConfig.ROUTING_KEY)));
             assertTrue(queues.stream().anyMatch(q -> q.getName().equals(name + ".dlq")));
         }
-        assertEquals(4, queues.size());
+        assertEquals(6, queues.size());
     }
 }

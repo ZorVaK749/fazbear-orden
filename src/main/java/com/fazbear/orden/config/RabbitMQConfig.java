@@ -12,7 +12,7 @@ import org.springframework.context.annotation.Configuration;
  *
  * Topología:
  *   Exchange:    pedidos.exchange  (DirectExchange)
- *   Queues:      pedido.creado.notificaciones.queue / pedido.creado.reportes.queue
+ *   Queues:      pedido.creado.{notificaciones,reportes,productos}.queue
  *   Routing key: pedido.creado
  *
  * ms-orden publica al exchange; cada servicio recibe su propia copia.
@@ -34,7 +34,7 @@ public class RabbitMQConfig {
         DirectExchange deadLetterExchange = new DirectExchange("pedidos.dlx", true, false);
         java.util.List<Declarable> declarations = new java.util.ArrayList<>();
         declarations.add(deadLetterExchange);
-        for (String service : java.util.List.of("notificaciones", "reportes")) {
+        for (String service : java.util.List.of("notificaciones", "reportes", "productos")) {
             String name = "pedido.creado." + service + ".queue";
             Queue queue = QueueBuilder.durable(name)
                 .deadLetterExchange("pedidos.dlx").deadLetterRoutingKey(name).build();
