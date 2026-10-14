@@ -12,17 +12,15 @@ import org.springframework.context.annotation.Configuration;
  *
  * Topología:
  *   Exchange:    pedidos.exchange  (DirectExchange)
- *   Queue:       pedido.creado.queue
+ *   Queues:      pedido.creado.notificaciones.queue / pedido.creado.reportes.queue
  *   Routing key: pedido.creado
  *
- * ms-orden PUBLICA en esta cola cuando se confirma una compra.
- * ms-notificaciones y ms-reportes ESCUCHAN esta cola.
+ * ms-orden publica al exchange; cada servicio recibe su propia copia.
  */
 @Configuration
 public class RabbitMQConfig {
 
     public static final String EXCHANGE    = "pedidos.exchange";
-    public static final String QUEUE       = "pedido.creado.queue";
     public static final String ROUTING_KEY = "pedido.creado";
 
     @Bean
@@ -31,13 +29,22 @@ public class RabbitMQConfig {
     }
 
     @Bean
-    public Queue pedidoCreadoQueue() {
-        return QueueBuilder.durable(QUEUE).build();
-    }
-
-    @Bean
-    public Binding binding(Queue pedidoCreadoQueue, DirectExchange pedidosExchange) {
-        return BindingBuilder.bind(pedidoCreadoQueue).to(pedidosExchange).with(ROUTING_KEY);
+    public Declarables pedidoCreadoQueues() {
+        DirectExchange exchange = pedidosExchange();
+        DirectExchange deadLetterExchange = new DirectExchange("pedidos.dlx", true, false);
+        java.util.List<Declarable> declarations = new java.util.ArrayList<>();
+        declarations.add(deadLetterExchange);
+        for (String service : java.util.List.of("notificaciones", "reportes")) {
+            String name = "pedido.creado." + service + ".queue";
+            Queue queue = QueueBuilder.durable(name)
+                .deadLetterExchange("pedidos.dlx").deadLetterRoutingKey(name).build();
+            Queue deadLetterQueue = QueueBuilder.durable(name + ".dlq").build();
+            declarations.add(queue);
+            declarations.add(deadLetterQueue);
+            declarations.add(BindingBuilder.bind(queue).to(exchange).with(ROUTING_KEY));
+            declarations.add(BindingBuilder.bind(deadLetterQueue).to(deadLetterExchange).with(name));
+        }
+        return new Declarables(declarations);
     }
 
     /** Serializa/deserializa mensajes como JSON automáticamente. */
