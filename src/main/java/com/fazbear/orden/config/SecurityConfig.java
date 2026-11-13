@@ -27,10 +27,13 @@ public class SecurityConfig {
 
     @Value("${spring.security.oauth2.resourceserver.jwt.client-id}")
     private String clientId;
+    @Value("${spring.security.oauth2.resourceserver.jwt.jwk-set-uri:}")
+    private String jwkSetUri;
 
     @Bean
     public JwtDecoder jwtDecoder() {
-        NimbusJwtDecoder decoder = JwtDecoders.fromIssuerLocation(issuerUri);
+        NimbusJwtDecoder decoder = jwkSetUri.isBlank() ? JwtDecoders.fromIssuerLocation(issuerUri)
+            : NimbusJwtDecoder.withJwkSetUri(jwkSetUri).build();
         OAuth2TokenValidator<Jwt> audienceValidator = new JwtClaimValidator<List<String>>(
             "aud", aud -> aud != null && aud.contains(clientId)
         );
