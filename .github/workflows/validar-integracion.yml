@@ -17,7 +17,10 @@ jobs:
           POSTGRES_PASSWORD: ev3test
           POSTGRES_DB: ev3test
         ports: ['5432:5432']
-        options: --health-cmd='pg_isready -U ev3test' --health-interval=5s --health-retries=10
+        options: >-
+          --health-cmd "pg_isready -U ev3test"
+          --health-interval 5s
+          --health-retries 10
     env:
       TEST_DATABASE_URL: jdbc:postgresql://localhost:5432/ev3test
       TEST_DATABASE_USER: ev3test
