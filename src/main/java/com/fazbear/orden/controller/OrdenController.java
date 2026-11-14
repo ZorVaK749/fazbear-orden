@@ -38,7 +38,7 @@ public class OrdenController {
             @RequestBody ConfirmarOrdenRequest request,
             @RequestHeader("Authorization") String bearerToken,
             @org.springframework.security.core.annotation.AuthenticationPrincipal org.springframework.security.oauth2.jwt.Jwt jwt) {
-        if (environment.matchesProfiles("ev3-local")) {
+        if (environment.matchesProfiles("ev3-local", "ev3-aws")) {
             throw new org.springframework.web.server.ResponseStatusException(
                 org.springframework.http.HttpStatus.CONFLICT, "USE_PAYMENT_FLOW");
         }

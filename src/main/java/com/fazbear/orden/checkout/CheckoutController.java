@@ -7,7 +7,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@Profile("ev3-local")
+@Profile({"ev3-local", "ev3-aws"})
 @RequestMapping("/api/orden")
 public class CheckoutController {
     private final CheckoutService service;

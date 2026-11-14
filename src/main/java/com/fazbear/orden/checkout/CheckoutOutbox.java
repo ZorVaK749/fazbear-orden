@@ -13,7 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /** At-least-once delivery: consumers deduplicate stable eventoId (operation UUID). */
 @Component
-@Profile("ev3-local")
+@Profile({"ev3-local", "ev3-aws"})
 @EnableScheduling
 public class CheckoutOutbox {
     private final JdbcTemplate db;

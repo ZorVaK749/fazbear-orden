@@ -1,4 +1,7 @@
-# Trusted checkout — isolated EV3 local only
+# Trusted checkout — EV3 PostgreSQL
+
+AWS: profile `ev3-aws` / `Dockerfile.aws`, no LAB JWKS. See Pago repository
+`docs/AWS_DEPLOY_ROLLBACK.md`. Legacy EV2 JVMs/H2 must not be restarted.
 
 Run `Dockerfile.local` / `SPRING_PROFILES_ACTIVE=ev3-local`. Port **8080**.
 Required: dedicated PostgreSQL (`ORDEN_DB_URL`, `ORDEN_DB_USER`, `ORDEN_DB_PASSWORD`),
@@ -21,7 +24,7 @@ Never point local settings at historical databases or AWS. Flyway manages only t
 * `GET /api/orden/cotizaciones/{uuid}` returns same snapshot, owner only (404 otherwise).
   Expiry remains visible so Pago can reject expired snapshots; GET itself does not consume quote.
 * `POST /api/orden/confirmar-pago`, `Idempotency-Key`: `{"operacionId":"uuid","pagoId":"uuid"}`.
-  Before first creation requires unexpired quote and authoritative Pago `GET /internal/pagos/{id}` with
+  Before first creation requires authoritative Pago `GET /internal/pagos/{id}` with
   `X-Service-Key`; matches all IDs, tenant, owner, amount, CLP, APPROVED, `simulacion:true`, zero refunded total.
   Calls Pedidos `POST /internal/pedidos/pagados` with snapshot and same operation/payment references.
   Returns `{pedidoId,mensaje,estado:"PENDIENTE",total,pagoId,simulacion:true}`.
@@ -34,8 +37,9 @@ Order creation is idempotent in Pedidos (unique operation AND payment). Row/advi
 concurrent requests. Confirmation and durable outbox are committed together locally. HTTP calls have bounded timeouts.
 Rabbit retries an unsent outbox every 3s, with broker confirms and stable `eventoId=operacionId`; at-least-once,
 not exactly-once. Existing operational exchange/routing/pedido items remain unchanged; stock consumers must deduplicate.
-If Pedidos succeeds but local commit is lost, retry same operation/payment before quote expiry: Pedidos returns same order.
-An expired ambiguous attempt requires operator reconciliation, never a second charge/order with invented references.
+If Pedidos succeeds but local commit is lost, retry same operation/payment: Pedidos returns the same order,
+including after quote expiry. Pago checks TTL before approval; Orden must not strand a previously approved
+payment simply because confirmation arrives later. DECLINED/REFUNDED/mismatched payments remain rejected.
 No distributed transaction with refund/stock; catalog stock is checked, not reserved. Concurrent refunds can race a
 confirmation; this is an explicit simulation limit. Outbox may still be pending when HTTP confirmation succeeds.
 No automatic cart deletion (avoid losing concurrently added items). No bank claim; simulated payments only.

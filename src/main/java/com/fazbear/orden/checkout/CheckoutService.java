@@ -17,7 +17,7 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.server.ResponseStatusException;
 
 @Service
-@Profile("ev3-local")
+@Profile({"ev3-local", "ev3-aws"})
 public class CheckoutService {
     private final JdbcTemplate db;
     private final RestClient http = RestClient.builder()
@@ -131,7 +131,9 @@ public class CheckoutService {
             if (!request.pagoId().equals(q.get("pago_id"))) throw error(HttpStatus.CONFLICT,"PAYMENT_CONFLICT");
             return result(q.get("pedido_id"),q.get("importe"),request.pagoId());
         }
-        if (!expiry(q).isAfter(Instant.now())) throw error(HttpStatus.CONFLICT,"QUOTE_EXPIRED");
+        // Pago is authoritative and refuses approval of an expired quote. Do not
+        // strand an already approved payment (or an externally created order)
+        // when a confirmation retry happens after the quote's TTL.
         Map<?,?> payment;
         try { payment=http.get().uri(pago+"/internal/pagos/"+request.pagoId()).header("X-Service-Key",serviceKey)
             .retrieve().body(Map.class); }

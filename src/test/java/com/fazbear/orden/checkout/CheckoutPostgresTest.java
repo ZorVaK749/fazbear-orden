@@ -89,12 +89,22 @@ class CheckoutPostgresTest {
     @Test void expiredQuoteCannotCreateOrder() {
         operation=(UUID)quote("quote",2).get("operacionId");
         db.update("update checkout_quote set expires_at=now()-interval '1 second'");
+        paymentState="DECLINED";
         assertThrows(ResponseStatusException.class,() -> confirm("confirm")); assertEquals(0,orders.get());
+    }
+    @Test void verifiedApprovedPaymentCanConfirmAfterQuoteTtl() {
+        operation=(UUID)quote("quote",2).get("operacionId");
+        // Payment was approved while valid; the user returns after the TTL.
+        db.update("update checkout_quote set expires_at=now()-interval '1 second'");
+        assertEquals(confirm("confirm"),confirm("confirm"));
+        assertEquals(1,orders.get());
+        assertEquals(1,db.queryForObject("select count(*) from checkout_outbox",Integer.class));
     }
     @Test void lostLocalCommitRetriesSameExternalOperation() {
         operation=(UUID)quote("quote",2).get("operacionId");
         tx.execute(s -> { service.confirm(new CheckoutController.Confirmation(operation,paymentId),"confirm",jwt(owner)); s.setRollbackOnly(); return null; });
         assertEquals(0,db.queryForObject("select count(*) from checkout_outbox",Integer.class));
+        db.update("update checkout_quote set expires_at=now()-interval '1 second'");
         confirm("confirm"); assertEquals(1,orders.get());
         assertEquals(1,db.queryForObject("select count(*) from checkout_outbox",Integer.class));
     }
