@@ -24,6 +24,8 @@ class CheckoutPostgresTest {
     final UUID owner=UUID.randomUUID(),paymentId=UUID.randomUUID();
     JdbcTemplate db; TransactionTemplate tx; CheckoutService service; HttpServer server;
     UUID operation; String paymentOwner; String paymentAmount; String paymentState;
+    boolean simulated = true;
+    String provider = "UNVERIFIED";
     final AtomicInteger orders=new AtomicInteger();
     final Map<String,Object> createdOrders=new HashMap<>();
     String schema;
@@ -44,11 +46,13 @@ class CheckoutPostgresTest {
             } else if (path.startsWith("/internal/pagos/")) {
                 assertEquals("test-service-key",exchange.getRequestHeaders().getFirst("X-Service-Key"));
                 body="{\"pagoId\":\""+paymentId+"\",\"operacionId\":\""+operation+"\",\"tenantId\":\""+tenant
-                    +"\",\"ownerId\":\""+paymentOwner+"\",\"importe\":"+paymentAmount+",\"moneda\":\"CLP\",\"estado\":\""+paymentState+"\",\"simulacion\":true,\"totalReembolsado\":0}";
+                    +"\",\"ownerId\":\""+paymentOwner+"\",\"importe\":"+paymentAmount+",\"moneda\":\"CLP\",\"estado\":\""+paymentState
+                    +"\",\"simulacion\":"+simulated+",\"metodo\":\""+provider+"\",\"totalReembolsado\":0}";
             } else {
                 assertEquals("test-service-key",exchange.getRequestHeaders().getFirst("X-Service-Key"));
                 var payload=new com.fasterxml.jackson.databind.ObjectMapper().readValue(exchange.getRequestBody(),Map.class);
                 assertEquals("2500.00",new BigDecimal(payload.get("importe").toString()).setScale(2).toString());
+                assertEquals(simulated, payload.get("simulacion"));
                 createdOrders.computeIfAbsent(payload.get("operacionId").toString(),k -> orders.incrementAndGet());
                 body="{\"pedidoId\":42}";
             }
@@ -91,6 +95,20 @@ class CheckoutPostgresTest {
         db.update("update checkout_quote set expires_at=now()-interval '1 second'");
         paymentState="DECLINED";
         assertThrows(ResponseStatusException.class,() -> confirm("confirm")); assertEquals(0,orders.get());
+    }
+    @Test void onlyVerifiedWebpayModeCreatesTheOrderAndSurvivesAReplay() {
+        operation=(UUID)quote("quote",2).get("operacionId");
+        simulated=false;
+        assertThrows(ResponseStatusException.class,() -> confirm("confirm"));
+        provider="WEBPAY_INTEGRACION";
+        paymentState="PENDING";
+        assertThrows(ResponseStatusException.class,() -> confirm("confirm"));
+        assertEquals(0,orders.get());
+        paymentState="APPROVED";
+        var order=confirm("confirm");
+        assertEquals(false,order.get("simulacion"));
+        assertEquals(order,confirm("confirm"));
+        assertEquals(1,orders.get());
     }
     @Test void verifiedApprovedPaymentCanConfirmAfterQuoteTtl() {
         operation=(UUID)quote("quote",2).get("operacionId");
