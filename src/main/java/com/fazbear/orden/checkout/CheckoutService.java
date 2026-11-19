@@ -129,7 +129,7 @@ public class CheckoutService {
         var q=row(request.operacionId(),owner,true);
         if (q.get("pedido_id")!=null) {
             if (!request.pagoId().equals(q.get("pago_id"))) throw error(HttpStatus.CONFLICT,"PAYMENT_CONFLICT");
-            return result(q.get("pedido_id"),q.get("importe"),request.pagoId());
+            return result(q.get("pedido_id"),q.get("importe"),request.pagoId(),Boolean.TRUE.equals(q.get("pago_simulado")));
         }
         // Pago is authoritative and refuses approval of an expired quote. Do not
         // strand an already approved payment (or an externally created order)
@@ -138,35 +138,40 @@ public class CheckoutService {
         try { payment=http.get().uri(pago+"/internal/pagos/"+request.pagoId()).header("X-Service-Key",serviceKey)
             .retrieve().body(Map.class); }
         catch (RuntimeException e) { throw error(HttpStatus.BAD_GATEWAY,"PAYMENT_UNAVAILABLE"); }
+        boolean simulated = payment != null && Boolean.TRUE.equals(payment.get("simulacion"));
+        boolean webpay = payment != null && Boolean.FALSE.equals(payment.get("simulacion"))
+                && matches(payment, "metodo", "WEBPAY_INTEGRACION");
         if (!matches(payment,"pagoId",request.pagoId()) || !matches(payment,"operacionId",request.operacionId())
                 || !matches(payment,"tenantId",tenant) || !matches(payment,"ownerId",owner)
                 || !matches(payment,"moneda","CLP") || !matches(payment,"estado","APPROVED")
-                || !Boolean.TRUE.equals(payment.get("simulacion")) || !amount(payment.get("importe"),(BigDecimal)q.get("importe"))
+                || (!simulated && !webpay) || !amount(payment.get("importe"),(BigDecimal)q.get("importe"))
                 || !amount(payment.get("totalReembolsado"),BigDecimal.ZERO)) throw error(HttpStatus.CONFLICT,"PAYMENT_MISMATCH");
         var payload=new LinkedHashMap<>(view(q)); payload.remove("expiraEn");
-        payload.put("pagoId",request.pagoId()); payload.put("simulacion",true);
+        payload.put("pagoId",request.pagoId()); payload.put("simulacion",simulated);
         Map<?,?> order;
         try { order=http.post().uri(pedidos+"/internal/pedidos/pagados").header("X-Service-Key",serviceKey)
             .body(payload).retrieve().body(Map.class); }
         catch (RuntimeException e) { throw error(HttpStatus.BAD_GATEWAY,"PEDIDOS_UNAVAILABLE_RETRY_SAME_OPERATION"); }
         if (order==null || !(order.get("pedidoId") instanceof Number id) || id.longValue()<1)
             throw error(HttpStatus.BAD_GATEWAY,"INVALID_PEDIDOS_RESPONSE");
-        db.update("update checkout_quote set pedido_id=?,pago_id=?,confirm_key=? where id=?",id.longValue(),request.pagoId(),key,request.operacionId());
+        db.update("update checkout_quote set pedido_id=?,pago_id=?,confirm_key=?,pago_simulado=? where id=?",
+                id.longValue(),request.pagoId(),key,simulated,request.operacionId());
         PedidoEvent event=new PedidoEvent(id.longValue(),owner.toString(),"",(BigDecimal)q.get("importe"),"PENDIENTE",LocalDateTime.now().toString());
         event.setEventoId(request.operacionId().toString());
         event.setItems(decode(q.get("items").toString()).stream().map(i -> new PedidoEvent.ItemStock(
             ((Number)i.get("productoId")).longValue(),((Number)i.get("cantidad")).intValue())).toList());
         db.update("insert into checkout_outbox(event_id,payload) values(?,?)",request.operacionId(),encode(event));
-        return result(id.longValue(),q.get("importe"),request.pagoId());
+        return result(id.longValue(),q.get("importe"),request.pagoId(),simulated);
     }
     private boolean matches(Map<?,?> m,String k,Object value) { return m!=null && value.toString().equals(String.valueOf(m.get(k))); }
     private boolean amount(Object value,BigDecimal expected) {
         try { return value!=null && new BigDecimal(value.toString()).compareTo(expected)==0; }
         catch (RuntimeException e) { return false; }
     }
-    private Map<String,Object> result(Object id,Object total,UUID pagoId) {
-        return Map.of("pedidoId",id,"mensaje","Pedido confirmado con pago SIMULADO; carrito conservado",
-            "estado","PENDIENTE","total",total,"pagoId",pagoId,"simulacion",true);
+    private Map<String,Object> result(Object id,Object total,UUID pagoId,boolean simulated) {
+        String mode = simulated ? "SIMULADO" : "WEBPAY INTEGRACIÓN";
+        return Map.of("pedidoId",id,"mensaje","Pedido confirmado con pago " + mode + "; carrito conservado",
+            "estado","PENDIENTE","total",total,"pagoId",pagoId,"simulacion",simulated);
     }
     String encode(Object value) {
         try { return json.writeValueAsString(value); } catch (Exception e) { throw new IllegalStateException(e); }
