@@ -89,7 +89,7 @@ public class CheckoutService {
                     || !(product.get("nombre") instanceof String name) || name.isBlank() || name.length()>120)
                 throw error(HttpStatus.CONFLICT,"PRODUCT_UNAVAILABLE");
             BigDecimal price;
-            try { price=new BigDecimal(product.get("precio").toString()).setScale(2,java.math.RoundingMode.UNNECESSARY); }
+            try { price=new BigDecimal(product.get("precio").toString()).setScale(0,java.math.RoundingMode.UNNECESSARY); }
             catch (RuntimeException e) { throw error(HttpStatus.CONFLICT,"INVALID_CATALOG_PRICE"); }
             if (price.signum()<=0) throw error(HttpStatus.CONFLICT,"INVALID_CATALOG_PRICE");
             items.add(Map.of("productoId",i.getKey(),"cantidad",i.getValue(),"nombreProducto",product.get("nombre"),"precioUnitario",price));

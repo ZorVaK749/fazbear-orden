@@ -26,6 +26,7 @@ class CheckoutPostgresTest {
     UUID operation; String paymentOwner; String paymentAmount; String paymentState;
     boolean simulated = true;
     String provider = "UNVERIFIED";
+    String catalogPrice = "1250";
     final AtomicInteger orders=new AtomicInteger();
     final Map<String,Object> createdOrders=new HashMap<>();
     String schema;
@@ -42,7 +43,7 @@ class CheckoutPostgresTest {
             String path=exchange.getRequestURI().getPath(); String body;
             if (path.startsWith("/api/productos/")) {
                 assertEquals("Bearer delegated",exchange.getRequestHeaders().getFirst("Authorization"));
-                body="{\"id\":1,\"nombre\":\"Pizza\",\"precio\":1250,\"stock\":10}";
+                body="{\"id\":1,\"nombre\":\"Pizza\",\"precio\":"+catalogPrice+",\"stock\":10}";
             } else if (path.startsWith("/internal/pagos/")) {
                 assertEquals("test-service-key",exchange.getRequestHeaders().getFirst("X-Service-Key"));
                 body="{\"pagoId\":\""+paymentId+"\",\"operacionId\":\""+operation+"\",\"tenantId\":\""+tenant
@@ -78,6 +79,13 @@ class CheckoutPostgresTest {
         assertThrows(ResponseStatusException.class,() -> quote("quote-key",3));
         assertThrows(ResponseStatusException.class,() -> service.get(operation,jwt(UUID.randomUUID())));
         assertEquals(1,db.queryForObject("select count(*) from checkout_quote",Integer.class));
+    }
+    @Test void wholeClpOnlyForNewQuotes() {
+        catalogPrice="12.99";
+        var error=assertThrows(ResponseStatusException.class,() -> quote("new-quote",1));
+        assertEquals("INVALID_CATALOG_PRICE",error.getReason());
+        catalogPrice="12990.00";
+        assertEquals(new BigDecimal("12990.00"),quote("new-quote",1).get("importe"));
     }
     @Test void rejectTamperedAmountOwnerAndUnapprovedPaymentThenRetryOnce() {
         operation=(UUID)quote("quote",2).get("operacionId");
